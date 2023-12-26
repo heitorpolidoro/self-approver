@@ -51,7 +51,9 @@ def approve_if_ok(event: StatusEvent) -> None:
     """
     if event.state == "success":
         for branch in event.branches:
-            pr = get_existing_pr(event.repository, f"{event.repository.owner.login}:{branch.name}")
+            pr = get_existing_pr(
+                event.repository, f"{event.repository.owner.login}:{branch.name}"
+            )
             if pr.mergeable_state == "clean":
                 pr.merge(merge_method="SQUASH")
 
