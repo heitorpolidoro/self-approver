@@ -28,7 +28,10 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
-def get_existing_pr(repo: Repository, head: str) -> Optional[PullRequest]:  # TODO use from githubapp
+
+def get_existing_pr(
+    repo: Repository, head: str
+) -> Optional[PullRequest]:  # TODO use from githubapp
     """
     Returns an existing PR if it exists.
     :param repo: The Repository to get the PR from.
@@ -36,6 +39,8 @@ def get_existing_pr(repo: Repository, head: str) -> Optional[PullRequest]:  # TO
     :return: Exists PR or None.
     """
     return next(iter(repo.get_pulls(state="open", head=head)), None)
+
+
 @webhook_handler.webhook_handler(StatusEvent)
 def approve_if_ok(event: StatusEvent) -> None:
     """
@@ -46,7 +51,9 @@ def approve_if_ok(event: StatusEvent) -> None:
     """
     if event.state == "success":
         for branch in event.branches:
-            pr = get_existing_pr(event.repository, f"{event.repository.owner.login}:{branch}")
+            pr = get_existing_pr(
+                event.repository, f"{event.repository.owner.login}:{branch}"
+            )
             pr.merge(merge_method="SQUASH")
 
 
