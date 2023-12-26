@@ -49,13 +49,16 @@ def approve_if_ok(event: StatusEvent) -> None:
     If a pull request already exists for the new branch, the function enables auto-merge for the pull request.
     Otherwise, it creates a new pull request and enables auto-merge for it.
     """
+    print(f"{event.state=}")
     if event.state == "success":
         for branch in event.branches:
             pr = get_existing_pr(
                 event.repository, f"{event.repository.owner.login}:{branch.name}"
             )
+            print(f"{pr.mergeable_state=}")
             if pr.mergeable_state == "clean":
-                pr.merge(merge_method="SQUASH")
+                print("MERGE")
+                # pr.merge(merge_method="SQUASH")
 
 
 @app.route("/", methods=["GET"])
