@@ -5,14 +5,17 @@ including a webhook handler for creating pull requests when new branches are cre
 import logging
 import os
 import sys
+from typing import Optional
 
 import sentry_sdk
 from flask import Flask, request
+from github.PullRequest import PullRequest
+from github.Repository import Repository
 from githubapp import webhook_handler
 from githubapp.events import StatusEvent
 
 app = Flask("Self Approver")
-app.__doc__ = "This is a Flask application for generating pull requests."
+app.__doc__ = "This is a Flask application auto merging pull requests."
 
 if sentry_dns := os.getenv("SENTRY_DNS"):  # pragma: no cover
     # Initialize Sentry SDK for error logging
@@ -25,7 +28,14 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
-
+def get_existing_pr(repo: Repository, head: str) -> Optional[PullRequest]:  # TODO use from githubapp
+    """
+    Returns an existing PR if it exists.
+    :param repo: The Repository to get the PR from.
+    :param head: The branch to check for an existing PR.
+    :return: Exists PR or None.
+    """
+    return next(iter(repo.get_pulls(state="open", head=head)), None)
 @webhook_handler.webhook_handler(StatusEvent)
 def approve_if_ok(event: StatusEvent) -> None:
     """
@@ -34,17 +44,10 @@ def approve_if_ok(event: StatusEvent) -> None:
     If a pull request already exists for the new branch, the function enables auto-merge for the pull request.
     Otherwise, it creates a new pull request and enables auto-merge for it.
     """
-    repository = event.repository
-    branch = event.ref
-    # Log branch creation
-    logger.info(
-        "Branch %s:%s created in %s",
-        repository.owner.login,
-        branch,
-        repository.full_name,
-    )
-    if pr := get_or_create_pr(repository, branch):
-        enable_auto_merge(pr)
+    if event.state == "success":
+        for branch in event.branches:
+            pr = get_existing_pr(event.repository, f"{event.repository.owner.login}:{branch}")
+            pr.merge(merge_method="SQUASH")
 
 
 @app.route("/", methods=["GET"])
