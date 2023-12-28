@@ -52,7 +52,9 @@ def approve_if_ok(event: StatusEvent) -> None:
     Otherwise, it creates a new pull request and enables auto-merge for it.
     """
     for branch in event.branches:
-        print(f"{event.repository.full_name}:{branch.name} -> {event.context} -> {event.state}")
+        print(
+            f"{event.repository.full_name}:{branch.name} -> {event.context} -> {event.state}"
+        )
     if event.state == "success":
         for branch in event.branches:
             if pr := get_existing_pr(
@@ -62,7 +64,7 @@ def approve_if_ok(event: StatusEvent) -> None:
                 if base.protected:
                     protection: BranchProtection = base.get_protection()
                     protection.required_pull_request_reviews.required_approving_review_count
-                    protection.required_status_checks.contexts # list
+                    protection.required_status_checks.contexts  # list
                     pr.mergeable
                 print(f"{pr.mergeable_state=}")
                 if pr.mergeable_state == "clean":
