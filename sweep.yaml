@@ -3,13 +3,13 @@
 
 # This setting contains a list of rules that Sweep will check for. If any of these rules are broken in a new commit, Sweep will create an pull request to fix the broken rule.
 rules:
+  - "We use unit tests for our code. If we have 'class.py', we should have 'test_class.py' in the tests/ directory."
   - "All new business logic should have corresponding unit tests in the tests/ directory."
   - "Refactor large functions to be more modular."
-  - "Add docstrings to all functions and file headers."
+  - "Add docstrings to all functions and file headers, except in tests and functions starting with '__'."
   - "All docstrings and comments should be up to date."
   - "Leftover TODOs in the code should be handled."
   - "Any clearly inefficient or repeated code should be optimized or refactored."
-  - "We use unit tests for our code. If we have 'class.py', we should have 'test_class.py' in the tests/ directory."
 
 # This is the branch that Sweep will develop from and make pull requests to. Most people use "main' or 'master' but some users also use 'dev' or 'staging'.
 branch: 'master'
@@ -22,7 +22,7 @@ gha_enabled: True
 # Example:
 #
 # description: sweepai/sweep is a python project. The main api endpoints are in sweepai/api.py. Write code that adheres to PEP8.
-description: ''
+description: 'heitorpolidoro/self-approver is a python App to approve PRs in specific conditions'
 
 # This sets whether to create pull requests as drafts. If this is set to True, then all pull requests will be created as drafts and GitHub Actions will not be triggered.
 draft: False
@@ -36,4 +36,5 @@ blocked_dirs: []
 #
 # docs:
 #   - PyGitHub: ["https://pygithub.readthedocs.io/en/latest/", "We use pygithub to interact with the GitHub API"]
-docs: [".github/"]
+docs:
+  - PyGitHub: ["https://pygithub.readthedocs.io/en/latest/", "We use pygithub to interact with the GitHub API"]
