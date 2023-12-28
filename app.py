@@ -9,6 +9,8 @@ from typing import Optional
 
 import sentry_sdk
 from flask import Flask, request
+from github.Branch import Branch
+from github.BranchProtection import BranchProtection
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 from githubapp import webhook_handler
@@ -49,16 +51,23 @@ def approve_if_ok(event: StatusEvent) -> None:
     If a pull request already exists for the new branch, the function enables auto-merge for the pull request.
     Otherwise, it creates a new pull request and enables auto-merge for it.
     """
-    print(f"{event.state=}")
+    for branch in event.branches:
+        print(f"{event.repository.full_name}:{branch.name} -> {event.context} -> {event.state}")
     if event.state == "success":
         for branch in event.branches:
-            pr = get_existing_pr(
+            if pr := get_existing_pr(
                 event.repository, f"{event.repository.owner.login}:{branch.name}"
-            )
-            print(f"{pr.mergeable_state=}")
-            if pr.mergeable_state == "clean":
-                print("MERGE")
-                # pr.merge(merge_method="SQUASH")
+            ):
+                base: Branch = event.repository.get_branch(pr.base.ref)
+                if base.protected:
+                    protection: BranchProtection = base.get_protection()
+                    protection.required_pull_request_reviews.required_approving_review_count
+                    protection.required_status_checks.contexts # list
+                    pr.mergeable
+                print(f"{pr.mergeable_state=}")
+                if pr.mergeable_state == "clean":
+                    print("MERGE")
+                    # pr.merge(merge_method="SQUASH")
 
 
 @app.route("/", methods=["GET"])
