@@ -23,27 +23,13 @@ def repository():
 
 
 @pytest.fixture
-def issue():
-    """
-    This fixture returns a mock issue object with default values for the attributes.
-    :return: Mocked Issue
-    """
-    issue = Mock()
-    issue.title = "feature"
-    issue.body = "feature body"
-    issue.number = 42
-    return issue
-
-
-@pytest.fixture
-def event(repository, issue):
+def event(repository):
     """
     This fixture returns a mock event object with default values for the attributes.
     :return: Mocked Event
     """
     event = Mock()
     event.repository = repository
-    event.repository.get_issue.return_value = issue
     event.ref = "issue-42"
     return event
 
