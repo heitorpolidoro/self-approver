@@ -8,6 +8,10 @@ import sys
 
 import sentry_sdk
 from flask import Flask, request
+from github.Branch import Branch
+from github.PullRequest import PullRequest
+from github.Repository import Repository
+
 from githubapp import webhook_handler
 from githubapp.events import StatusEvent
 
@@ -49,7 +53,7 @@ def approve_if_ok(event: StatusEvent) -> None:
                 approve_if_ok_pr(repository, pr, base)
 
 
-def approve_if_ok_pr(repository, pr, base):
+def approve_if_ok_pr(repository: Repository, pr: PullRequest, base: Branch) -> None:
     """
     This function checks if the protection rules matches:
     - Has only one required review
