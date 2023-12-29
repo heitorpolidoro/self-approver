@@ -14,10 +14,7 @@ def branch():
     This fixture returns a mocked branch object with default values for the attributes.
     :return: Mocked Repository
     """
-    branch = Mock()
-    branch.protected = False
-    branch.ref = "feature"
-    return branch
+    return Mock(protected=False, ref="feature")
 
 
 @pytest.fixture
@@ -26,9 +23,7 @@ def author():
     This fixture returns a mocked author object with default values for the attributes.
     :return: Mocked NamedUser
     """
-    author = Mock()
-    author.login = "heitorpolidoro"
-    return author
+    return Mock(login="heitorpolidoro")
 
 
 @pytest.fixture
@@ -37,9 +32,7 @@ def protected_branch(author):
     This fixture returns a mocked protected branch object with default values for the attributes.
     :return: Mocked Repository
     """
-    protected_branch = Mock()
-    protected_branch.protected = True
-    protected_branch.ref = "master"
+    protected_branch = Mock(protected=True, ref="master")
 
     required_pull_request_reviews = (
         protected_branch.get_protection.return_value.required_pull_request_reviews
@@ -55,11 +48,10 @@ def pull(protected_branch, branch, author):
     This fixture returns a mocked pull object with default values for the attributes.
     :return: Mocked Repository
     """
-    pull = Mock()
-    pull.base = protected_branch
-    pull.head = branch
-    pull.requested_reviewers = [author]
-    pull.state = "open"
+    pull = Mock(
+        base=protected_branch, head=branch, requested_reviewers=[author], state="open"
+    )
+    pull.get_reviews.return_value = []
     return pull
 
 
@@ -69,9 +61,8 @@ def commit(pull, author):
     This fixture returns a mocked commit object with default values for the attributes.
     :return: Mocked Commit
     """
-    commit = Mock()
+    commit = Mock(author=author)
     commit.get_pulls.return_value = [pull]
-    commit.author = author
     return commit
 
 
@@ -81,9 +72,9 @@ def repository(protected_branch, branch, commit):
     This fixture returns a mocked repository object with default values for the attributes.
     :return: Mocked Repository
     """
-    repository = Mock()
-    repository.default_branch = "master"
-    repository.full_name = "heitorpolidoro/pull-request-generator"
+    repository = Mock(
+        default_branch="master", full_name="heitorpolidoro/pull-request-generator"
+    )
     repository.get_branch = (
         lambda branch_ref: protected_branch if branch_ref == "master" else branch
     )
@@ -97,11 +88,7 @@ def event(repository, commit):
     This fixture returns a mocked event object with default values for the attributes.
     :return: Mocked Event
     """
-    event = Mock()
-    event.repository = repository
-    event.commit = commit
-    event.ref = "issue-42"
-    return event
+    return Mock(repository=repository, commit=commit, ref="issue-42")
 
 
 @pytest.fixture
@@ -151,6 +138,18 @@ def test_approve_if_ok_pr(pull, repository, protected_branch):
     )
 
 
+def test_approve_if_ok_dismissed_review(pull, repository, protected_branch, author):
+    pull.requested_reviewers = []
+    pull.get_reviews.return_value = [
+        Mock(state="DISMISSED", user=author),
+        Mock(state="COMMENTED", user=Mock(login="other")),
+    ]
+    approve_if_ok_pr(repository, pull, protected_branch)
+    pull.create_review.assert_called_once_with(
+        body="Approved by Self Approver", event="APPROVE"
+    )
+
+
 def test_approve_if_ok_pr_not_match_pr_request_reviews(
     pull, repository, protected_branch, author
 ):
@@ -166,11 +165,19 @@ def test_approve_if_ok_pr_not_match_pr_request_reviews(
     required_pull_request_reviews.require_code_owner_reviews = []
     approve_if_ok_pr(repository, pull, protected_branch)
 
-    other_author = Mock()
-    other_author.login = "other"
+    required_pull_request_reviews.required_approving_review_count = 1
+    required_pull_request_reviews.require_code_owner_reviews = [author]
+    pull.requested_reviewers = []
+    approve_if_ok_pr(repository, pull, protected_branch)
+
+    other_author = Mock(login="other")
     required_pull_request_reviews.required_approving_review_count = 1
     required_pull_request_reviews.require_code_owner_reviews = [author]
     pull.requested_reviewers = [other_author]
+    approve_if_ok_pr(repository, pull, protected_branch)
+
+    pull.requested_reviewers = []
+    pull.get_reviews.return_value = [Mock(state="DISMISSED", user=other_author)]
     approve_if_ok_pr(repository, pull, protected_branch)
 
     pull.create_review.assert_not_called()
