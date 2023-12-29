@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 import sentry_sdk
 
-from app import app, approve_if_ok_pr, approve_if_ok
+from app import app, approve_if_ok, approve_if_ok_pr
 
 
 @pytest.fixture
@@ -117,14 +117,18 @@ def test_approve_if_ok_success(
     mock_approve_if_ok_pr.assert_called_once_with(repository, pull, protected_branch)
 
 
-def test_approve_if_ok_success_not_protected_branch(event, repository, pull, branch, mock_approve_if_ok_pr):
+def test_approve_if_ok_success_not_protected_branch(
+    event, repository, pull, branch, mock_approve_if_ok_pr
+):
     event.state = "success"
     pull.base = branch
     approve_if_ok(event)
     mock_approve_if_ok_pr.assert_not_called()
 
 
-def test_approve_if_ok_not_success(event, repository, pull, protected_branch, mock_approve_if_ok_pr):
+def test_approve_if_ok_not_success(
+    event, repository, pull, protected_branch, mock_approve_if_ok_pr
+):
     event.state = "failure"
     approve_if_ok(event)
     mock_approve_if_ok_pr.assert_not_called()

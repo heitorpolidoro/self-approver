@@ -8,7 +8,6 @@ import sys
 
 import sentry_sdk
 from flask import Flask, request
-
 from githubapp import webhook_handler
 from githubapp.events import StatusEvent
 
