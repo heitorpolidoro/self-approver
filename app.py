@@ -36,10 +36,10 @@ logging.basicConfig(
 @webhook_handler.webhook_handler(StatusEvent)
 def approve_if_ok(event: StatusEvent) -> None:
     """
-    This function is a webhook handler that creates a pull request when a new branch is created.
-    It takes a CreateBranchEvent object as a parameter, which contains information about the new branch.
-    If a pull request already exists for the new branch, the function enables auto-merge for the pull request.
-    Otherwise, it creates a new pull request and enables auto-merge for it.
+    This function is a webhook handler that check if the state is "success" and if the base branch of
+    each PR is protected, if so try to approve the PR
+
+    :param event: The status event
     """
     repository = event.repository
     if event.state == "success":
@@ -50,6 +50,15 @@ def approve_if_ok(event: StatusEvent) -> None:
 
 
 def approve_if_ok_pr(repository, pr, base):
+    """
+    This function checks if the protection rules matches:
+    - Has only one required review
+    - The branch creator is the same as the requested review
+
+    :param repository:
+    :param pr:
+    :param base:
+    """
     protection = base.get_protection()
     if (
         protection.required_pull_request_reviews.require_code_owner_reviews
