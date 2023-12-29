@@ -11,7 +11,6 @@ from flask import Flask, request
 from github.Branch import Branch
 from github.PullRequest import PullRequest
 from github.Repository import Repository
-
 from githubapp import webhook_handler
 from githubapp.events import StatusEvent
 
