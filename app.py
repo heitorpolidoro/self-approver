@@ -5,14 +5,10 @@ including a webhook handler for creating pull requests when new branches are cre
 import logging
 import os
 import sys
-from typing import Optional
 
 import sentry_sdk
 from flask import Flask, request
-from github.Branch import Branch
-from github.BranchProtection import BranchProtection
-from github.PullRequest import PullRequest
-from github.Repository import Repository
+
 from githubapp import webhook_handler
 from githubapp.events import StatusEvent
 
@@ -31,16 +27,11 @@ logging.basicConfig(
 )
 
 
-def get_existing_pr(
-    repo: Repository, head: str
-) -> Optional[PullRequest]:  # TODO use from githubapp
-    """
-    Returns an existing PR if it exists.
-    :param repo: The Repository to get the PR from.
-    :param head: The branch to check for an existing PR.
-    :return: Exists PR or None.
-    """
-    return next(iter(repo.get_pulls(state="open", head=head)), None)
+# @app.route("/callback", methods=["GET"])
+# def callback():
+#     installation_id from query string
+#     headers = dict(request.headers)
+#     body = request.json
 
 
 @webhook_handler.webhook_handler(StatusEvent)
@@ -51,25 +42,27 @@ def approve_if_ok(event: StatusEvent) -> None:
     If a pull request already exists for the new branch, the function enables auto-merge for the pull request.
     Otherwise, it creates a new pull request and enables auto-merge for it.
     """
-    for branch in event.branches:
-        print(
-            f"{event.repository.full_name}:{branch.name} -> {event.context} -> {event.state}"
-        )
+    repository = event.repository
     if event.state == "success":
-        for branch in event.branches:
-            if pr := get_existing_pr(
-                event.repository, f"{event.repository.owner.login}:{branch.name}"
-            ):
-                base: Branch = event.repository.get_branch(pr.base.ref)
-                if base.protected:
-                    protection: BranchProtection = base.get_protection()
-                    protection.required_pull_request_reviews.required_approving_review_count
-                    protection.required_status_checks.contexts  # list
-                    pr.mergeable
-                print(f"{pr.mergeable_state=}")
-                if pr.mergeable_state == "clean":
-                    print("MERGE")
-                    # pr.merge(merge_method="SQUASH")
+        for pr in event.commit.get_pulls():
+            base = repository.get_branch(pr.base.ref)
+            if base.protected:
+                approve_if_ok_pr(repository, pr, base)
+
+
+def approve_if_ok_pr(repository, pr, base):
+    protection = base.get_protection()
+    if (
+        protection.required_pull_request_reviews.require_code_owner_reviews
+        and protection.required_pull_request_reviews.required_approving_review_count
+        == 1
+    ):
+        head = repository.get_branch(pr.head.ref)
+        branch_owner = (
+            repository.compare(base.commit.sha, head.commit.sha).commits[0].author
+        )
+        if pr.requested_reviewers == [branch_owner]:
+            pr.create_review(event="APPROVE", body="Approved by Self Approver")
 
 
 @app.route("/", methods=["GET"])
