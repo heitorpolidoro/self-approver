@@ -28,7 +28,7 @@ dependencies = {file = ["requirements.txt"]}
 
 [tool.coverage.run]
 source = ["."]
-omit = ["tests/*"]
+omit = ["test_*"]
 relative_files = true
 
 [tool.black]

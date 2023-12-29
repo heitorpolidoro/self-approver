@@ -4,124 +4,166 @@ from unittest.mock import Mock, patch
 
 import pytest
 import sentry_sdk
-from github import GithubException
 
-from app import app
+from app import app, approve_if_ok, approve_if_ok_pr
 
 
 @pytest.fixture
-def repository():
+def branch():
     """
-    This fixture returns a mock repository object with default values for the attributes.
+    This fixture returns a mocked branch object with default values for the attributes.
+    :return: Mocked Repository
+    """
+    branch = Mock()
+    branch.protected = False
+    branch.ref = "feature"
+    return branch
+
+
+@pytest.fixture
+def author():
+    """
+    This fixture returns a mocked author object with default values for the attributes.
+    :return: Mocked NamedUser
+    """
+    author = Mock()
+    author.login = "heitorpolidoro"
+    return author
+
+
+@pytest.fixture
+def protected_branch(author):
+    """
+    This fixture returns a mocked protected branch object with default values for the attributes.
+    :return: Mocked Repository
+    """
+    protected_branch = Mock()
+    protected_branch.protected = True
+    protected_branch.ref = "master"
+
+    required_pull_request_reviews = (
+        protected_branch.get_protection.return_value.required_pull_request_reviews
+    )
+    required_pull_request_reviews.require_code_owner_reviews = [author]
+    required_pull_request_reviews.required_approving_review_count = 1
+    return protected_branch
+
+
+@pytest.fixture
+def pull(protected_branch, branch, author):
+    """
+    This fixture returns a mocked pull object with default values for the attributes.
+    :return: Mocked Repository
+    """
+    pull = Mock()
+    pull.base = protected_branch
+    pull.head = branch
+    pull.requested_reviewers = [author]
+    return pull
+
+
+@pytest.fixture
+def commit(pull, author):
+    """
+    This fixture returns a mocked commit object with default values for the attributes.
+    :return: Mocked Commit
+    """
+    commit = Mock()
+    commit.get_pulls.return_value = [pull]
+    commit.author = author
+    return commit
+
+
+@pytest.fixture
+def repository(protected_branch, branch, commit):
+    """
+    This fixture returns a mocked repository object with default values for the attributes.
     :return: Mocked Repository
     """
     repository = Mock()
     repository.default_branch = "master"
     repository.full_name = "heitorpolidoro/pull-request-generator"
-    repository.get_pulls.return_value = []
+    repository.get_branch = (
+        lambda branch_ref: protected_branch if branch_ref == "master" else branch
+    )
+    repository.compare.return_value.commits = [commit]
     return repository
 
 
 @pytest.fixture
-def issue():
+def event(repository, commit):
     """
-    This fixture returns a mock issue object with default values for the attributes.
-    :return: Mocked Issue
-    """
-    issue = Mock()
-    issue.title = "feature"
-    issue.body = "feature body"
-    issue.number = 42
-    return issue
-
-
-@pytest.fixture
-def event(repository, issue):
-    """
-    This fixture returns a mock event object with default values for the attributes.
+    This fixture returns a mocked event object with default values for the attributes.
     :return: Mocked Event
     """
     event = Mock()
     event.repository = repository
-    event.repository.get_issue.return_value = issue
+    event.commit = commit
     event.ref = "issue-42"
     return event
 
 
-# def test_create_pr(event):
-#     """
-#     This test case tests the create_branch_handler function when there are commits between the new branch and the
-#     default branch. It checks that the function creates a pull request with the correct parameters.
-#
-#     Expected behavior:
-#     - The function should create a pull request with the title "feature".
-#     - The pull request body should include a link to the issue with the title "feature" and the body "feature body".
-#     - The pull request body should include the text "Closes #42".
-#     - The pull request should not be a draft.
-#
-#     """
-#     expected_body = """### [feature](https://github.com/heitorpolidoro/pull-request-generator/issues/42)
-#
-# feature body
-#
-# Closes #42
-#
-# """
-#     create_branch_handler(event)
-#     event.repository.create_pull.assert_called_once_with(
-#         "master",
-#         "issue-42",
-#         title="feature",
-#         body=expected_body,
-#         draft=False,
-#     )
-#     event.repository.create_pull.return_value.enable_automerge.assert_called_once_with(
-#         merge_method="SQUASH"
-#     )
-#
-#
-# def test_create_pr_no_commits(event):
-#     """
-#     This test case tests the create_branch_handler function when there are no commits between the new branch and the
-#     default branch. It checks that the function handles this situation correctly by not creating a pull request.
-#     """
-#     event.repository.create_pull.side_effect = GithubException(
-#         422, message="No commits between 'master' and 'issue-42'"
-#     )
-#     create_branch_handler(event)
-#
-#
-# def test_create_pr_other_exceptions(event):
-#     """
-#     This test case tests the create_branch_handler function when an exception other than 'No commits between master and
-#     feature' is raised. It checks that the function raises the exception as expected.
-#
-#     Expected behavior:
-#     - The function should raise a GithubException with the message "Other exception".
-#
-#     """
-#     event.repository.create_pull.side_effect = GithubException(
-#         422, message="Other exception"
-#     )
-#     with pytest.raises(GithubException):
-#         create_branch_handler(event)
-#
-#
-# def test_enable_just_automerge_on_existing_pr(event):
-#     """
-#     This test case tests the create_branch_handler function when a pull request already exists for the new branch.
-#     It checks that the function enables auto-merge for the existing pull request and does not create a new pull request.
-#
-#     Expected behavior:
-#     - The function should not create a new pull request.
-#     - The function should enable auto-merge for the existing pull request with the merge method "SQUASH".
-#
-#     """
-#     existing_pr = Mock()
-#     event.repository.get_pulls.return_value = [existing_pr]
-#     create_branch_handler(event)
-#     event.repository.create_pull.assert_not_called()
-#     existing_pr.enable_automerge.assert_called_once_with(merge_method="SQUASH")
+@pytest.fixture
+def mock_approve_if_ok_pr():
+    with patch("app.approve_if_ok_pr") as mock:
+        yield mock
+
+
+def test_approve_if_ok_success(
+    event, repository, pull, protected_branch, mock_approve_if_ok_pr
+):
+    event.state = "success"
+    approve_if_ok(event)
+    mock_approve_if_ok_pr.assert_called_once_with(repository, pull, protected_branch)
+
+
+def test_approve_if_ok_success_not_protected_branch(
+    event, repository, pull, branch, mock_approve_if_ok_pr
+):
+    event.state = "success"
+    pull.base = branch
+    approve_if_ok(event)
+    mock_approve_if_ok_pr.assert_not_called()
+
+
+def test_approve_if_ok_not_success(
+    event, repository, pull, protected_branch, mock_approve_if_ok_pr
+):
+    event.state = "failure"
+    approve_if_ok(event)
+    mock_approve_if_ok_pr.assert_not_called()
+
+
+def test_approve_if_ok_pr(pull, repository, protected_branch):
+    approve_if_ok_pr(repository, pull, protected_branch)
+    pull.create_review.assert_called_once_with(
+        body="Approved by Self Approver", event="APPROVE"
+    )
+
+
+def test_approve_if_ok_pr_not_match_pr_request_reviews(
+    pull, repository, protected_branch, author
+):
+    required_pull_request_reviews = (
+        protected_branch.get_protection.return_value.required_pull_request_reviews
+    )
+
+    required_pull_request_reviews.required_approving_review_count = 2
+    required_pull_request_reviews.require_code_owner_reviews = [author]
+    approve_if_ok_pr(repository, pull, protected_branch)
+
+    required_pull_request_reviews.required_approving_review_count = 1
+    required_pull_request_reviews.require_code_owner_reviews = []
+    approve_if_ok_pr(repository, pull, protected_branch)
+
+    other_author = Mock()
+    other_author.login = "other"
+    required_pull_request_reviews.required_approving_review_count = 1
+    required_pull_request_reviews.require_code_owner_reviews = [author]
+    pull.requested_reviewers = [other_author]
+    approve_if_ok_pr(repository, pull, protected_branch)
+
+    pull.create_review.assert_not_called()
 
 
 class TestApp(TestCase):
@@ -140,7 +182,7 @@ class TestApp(TestCase):
         """
         response = self.app.get("/")
         assert response.status_code == 200
-        assert response.text == "Pull Request Generator App up and running!"
+        assert response.text == "Self Approver App up and running!"
 
     def test_webhook(self):
         """
