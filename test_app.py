@@ -60,7 +60,6 @@ def pull(protected_branch, branch, author):
     pull.head = branch
     pull.requested_reviewers = [author]
     pull.state = "open"
-    pull.mergeable_state = "clean"
     return pull
 
 
@@ -124,15 +123,6 @@ def test_approve_if_ok_success_closed_pr(
 ):
     event.state = "success"
     pull.state = "closed"
-    approve_if_ok(event)
-    mock_approve_if_ok_pr.assert_not_called()
-
-
-def test_approve_if_ok_success_mergeable_state_blocked(
-    event, repository, pull, branch, mock_approve_if_ok_pr
-):
-    event.state = "success"
-    pull.mergeable_state = "blocked"
     approve_if_ok(event)
     mock_approve_if_ok_pr.assert_not_called()
 

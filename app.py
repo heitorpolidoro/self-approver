@@ -47,7 +47,7 @@ def approve_if_ok(event: StatusEvent) -> None:
     repository = event.repository
     if event.state == "success":
         for pr in event.commit.get_pulls():
-            if pr.state == "open" and pr.mergeable_state == "clean":
+            if pr.state == "open":
                 base = repository.get_branch(pr.base.ref)
                 if base.protected:
                     approve_if_ok_pr(repository, pr, base)
