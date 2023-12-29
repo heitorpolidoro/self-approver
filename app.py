@@ -73,7 +73,13 @@ def approve_if_ok_pr(repository: Repository, pr: PullRequest, base: Branch) -> N
         branch_owner = (
             repository.compare(base.commit.sha, head.commit.sha).commits[0].author
         )
-        if pr.requested_reviewers == [branch_owner]:
+
+        if pr.requested_reviewers == [branch_owner] or any(
+            review
+            for review in pr.get_reviews()
+            if review.state == "DISMISSED" and review.user.login == branch_owner.login
+        ):
+            print(f"Pull Request #{pr.number} approved")
             pr.create_review(event="APPROVE", body="Approved by Self Approver")
 
 
