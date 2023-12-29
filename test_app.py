@@ -59,6 +59,7 @@ def pull(protected_branch, branch, author):
     pull.base = protected_branch
     pull.head = branch
     pull.requested_reviewers = [author]
+    pull.state = "open"
     return pull
 
 
@@ -115,6 +116,15 @@ def test_approve_if_ok_success(
     event.state = "success"
     approve_if_ok(event)
     mock_approve_if_ok_pr.assert_called_once_with(repository, pull, protected_branch)
+
+
+def test_approve_if_ok_success_closed_pr(
+    event, repository, pull, branch, mock_approve_if_ok_pr
+):
+    event.state = "success"
+    pull.state = "closed"
+    approve_if_ok(event)
+    mock_approve_if_ok_pr.assert_not_called()
 
 
 def test_approve_if_ok_success_not_protected_branch(
