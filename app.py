@@ -14,19 +14,20 @@ from github.Repository import Repository
 from githubapp import webhook_handler
 from githubapp.events import StatusEvent
 
-app = Flask("Self Approver")
-app.__doc__ = "This is a Flask application auto merging pull requests."
-
-if sentry_dns := os.getenv("SENTRY_DNS"):  # pragma: no cover
-    # Initialize Sentry SDK for error logging
-    sentry_sdk.init(sentry_dns)
-
 logger = logging.getLogger(__name__)
 logging.basicConfig(
     stream=sys.stdout,
     format="%(levelname)s:%(module)s:%(funcName)s:%(message)s",
     level=logging.INFO,
 )
+
+app = Flask("Self Approver")
+app.__doc__ = "This is a Flask application auto merging pull requests."
+
+if sentry_dns := os.getenv("SENTRY_DNS"):  # pragma: no cover
+    # Initialize Sentry SDK for error logging
+    sentry_sdk.init(sentry_dns)
+    logger.info("Sentry initialized")
 
 
 # @app.route("/callback", methods=["GET"])
@@ -45,15 +46,19 @@ def approve_if_ok(event: StatusEvent) -> None:
     :param event: The status event
     """
     repository = event.repository
+    print(f"{repository.full_name}:{[b.name for b in event.branches]}")
     if event.state == "success":
         for pr in event.commit.get_pulls():
             if pr.state == "open":
                 base = repository.get_branch(pr.base.ref)
                 if base.protected:
-                    approve_if_ok_pr(repository, pr, base)
+                    if approve_if_ok_pr(repository, pr, base):
+                        print(f"Pull Request #{pr.number} approved")
+                    else:
+                        print(f"Pull Request #{pr.number} not approved")
 
 
-def approve_if_ok_pr(repository: Repository, pr: PullRequest, base: Branch) -> None:
+def approve_if_ok_pr(repository: Repository, pr: PullRequest, base: Branch) -> bool:
     """
     This function checks if the protection rules matches:
     - Has only one required review
@@ -73,14 +78,19 @@ def approve_if_ok_pr(repository: Repository, pr: PullRequest, base: Branch) -> N
         branch_owner = (
             repository.compare(base.commit.sha, head.commit.sha).commits[0].author
         )
+        review_dismissed = False
+        for review in pr.get_reviews():
+            if review.user.login == branch_owner.login:
+                if review.state == "DISMISSED":
+                    review_dismissed = True
+                elif review.state == "APPROVED":
+                    review_dismissed = False
+                    break
 
-        if pr.requested_reviewers == [branch_owner] or any(
-            review
-            for review in pr.get_reviews()
-            if review.state == "DISMISSED" and review.user.login == branch_owner.login
-        ):
-            print(f"Pull Request #{pr.number} approved")
+        if pr.requested_reviewers == [branch_owner] or review_dismissed:
             pr.create_review(event="APPROVE", body="Approved by Self Approver")
+            return True
+    return False
 
 
 @app.route("/", methods=["GET"])

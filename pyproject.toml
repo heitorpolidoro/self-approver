@@ -20,7 +20,7 @@ classifiers = [
 dynamic = ["version", "dependencies"]
 
 [project.urls]
-"Homepage" = "https://github.com/heitorpolidoro/PROJECT_NAME"
+"Homepage" = "https://github.com/heitorpolidoro/self-approver"
 
 [tool.setuptools.dynamic]
 version = {attr = ".__version__"}
