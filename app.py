@@ -21,13 +21,22 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
-app = Flask("Self Approver")
-app.__doc__ = "This is a Flask application auto merging pull requests."
-
 if sentry_dns := os.getenv("SENTRY_DNS"):  # pragma: no cover
     # Initialize Sentry SDK for error logging
-    sentry_sdk.init(sentry_dns)
+    sentry_sdk.init(
+        dsn=sentry_dns,
+        # Set traces_sample_rate to 1.0 to capture 100%
+        # of transactions for performance monitoring.
+        traces_sample_rate=1.0,
+        # Set profiles_sample_rate to 1.0 to profile 100%
+        # of sampled transactions.
+        # We recommend adjusting this value in production.
+        profiles_sample_rate=1.0,
+    )
     logger.info("Sentry initialized")
+
+app = Flask("Self Approver")
+app.__doc__ = "This is a Flask application auto merging pull requests."
 
 
 # @app.route("/callback", methods=["GET"])
