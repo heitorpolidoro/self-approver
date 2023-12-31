@@ -21,7 +21,7 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
-if sentry_dns := os.getenv("SENTRY_DNS"):  # pragma: no cover
+if sentry_dns := os.getenv("SENTRY_DSN"):  # pragma: no cover
     # Initialize Sentry SDK for error logging
     sentry_sdk.init(
         dsn=sentry_dns,
