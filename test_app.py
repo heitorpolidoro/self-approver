@@ -88,7 +88,12 @@ def event(repository, commit):
     This fixture returns a mocked event object with default values for the attributes.
     :return: Mocked Event
     """
-    return Mock(repository=repository, commit=commit, ref="issue-42")
+    return Mock(
+        repository=repository,
+        commit=commit,
+        ref="issue-42",
+        branches=[Mock(name="issue-42")],
+    )
 
 
 @pytest.fixture

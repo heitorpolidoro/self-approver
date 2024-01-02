@@ -1,5 +1,6 @@
-# GithubAppHandler
-A handler helper to create GitHub App easily
+# Self Approver
+An App to approve Pull Requests within certain conditions:
+- WiP
 
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=heitorpolidoro_self-approver&metric=coverage)](https://sonarcloud.io/summary/new_code?id=heitorpolidoro_self-approver)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=heitorpolidoro_self-approver&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=heitorpolidoro_self-approver)
