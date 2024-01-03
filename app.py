@@ -56,6 +56,7 @@ def approve(event: StatusEvent) -> None:
     reasons = []
     approved_prs = []
     for pr in event.commit.get_pulls():
+        print(event.commit.get_combined_status().state)
         if any(status.state != "success" for status in event.commit.get_statuses()):
             reasons.append(f"Pull Request #{pr.number} not all checks are success")
             continue
