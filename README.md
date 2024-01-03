@@ -1,6 +1,7 @@
 # Self Approver
 An App to approve Pull Requests within certain conditions:
-- WiP
+- The branch "owner" (author of the first commit of the branch) is the repository owner
+- The base branch of the Pull Request is protected
 
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=heitorpolidoro_self-approver&metric=coverage)](https://sonarcloud.io/summary/new_code?id=heitorpolidoro_self-approver)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=heitorpolidoro_self-approver&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=heitorpolidoro_self-approver)
