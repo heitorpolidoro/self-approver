@@ -54,10 +54,13 @@ def approve(event: StatusEvent) -> None:
     repository = event.repository
     reasons = []
     approved_prs = []
+    print(f"Context {event.context}")
     for pr in event.commit.get_pulls():
         print(f"Checking Pull Request #{pr.number} from {repository.full_name}")
 
-        if event.commit.get_combined_status().state != "success":
+        for c in event.commit.get_check_runs():
+            print(c.name, c.conslusion)
+        if all(check.conclusion == "success"for check in event.commit.get_check_runs()):
             reasons.append(f"Pull Request #{pr.number} not all checks are success")
             continue
 
