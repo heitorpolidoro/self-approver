@@ -60,7 +60,9 @@ def approve(event: StatusEvent) -> None:
 
         for c in event.commit.get_check_runs():
             print(c.name, c.conclusion)
-        if any(check.conclusion != "success"for check in event.commit.get_check_runs()):
+        if any(
+            check.conclusion != "success" for check in event.commit.get_check_runs()
+        ):
             reasons.append(f"Pull Request #{pr.number} not all checks are success")
             continue
 
