@@ -8,7 +8,6 @@ import sys
 
 import sentry_sdk
 from flask import Flask, request
-
 from githubapp import webhook_handler
 from githubapp.events.check_run import CheckRunCompletedEvent
 
@@ -62,9 +61,7 @@ def approve(event: CheckRunCompletedEvent) -> None:
         commit = pr.get_commits()[0]
         for c in commit.get_check_runs():
             print(c.name, c.conclusion)
-        if any(
-            check.conclusion != "success" for check in commit.get_check_runs()
-        ):
+        if any(check.conclusion != "success" for check in commit.get_check_runs()):
             reasons.append(f"Pull Request #{pr.number} not all checks are success")
             continue
 
