@@ -59,10 +59,8 @@ def approve(event: StatusEvent) -> None:
         print(f"Checking Pull Request #{pr.number} from {repository.full_name}")
 
         for c in event.commit.get_check_runs():
-            print(c.name, c.conslusion)
-        if all(
-            check.conclusion == "success" for check in event.commit.get_check_runs()
-        ):
+            print(c.name, c.conclusion)
+        if any(check.conclusion != "success"for check in event.commit.get_check_runs()):
             reasons.append(f"Pull Request #{pr.number} not all checks are success")
             continue
 
