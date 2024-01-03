@@ -67,7 +67,7 @@ def commit(pull, author):
     """
     commit = Mock(author=author)
     commit.get_pulls.return_value = [pull]
-    commit.get_combined_status.return_value = Mock(state="success")
+    commit.get_check_runs.return_value = [Mock(conclusion="success")]
     return commit
 
 
@@ -150,7 +150,7 @@ def test_not_approve_when_pr_not_open(event, pull, author, capsys):
 
 
 def test_not_approve_when_failing_checks(event, pull, commit, capsys):
-    commit.get_combined_status.return_value = Mock(state="pending")
+    commit.get_check_runs.return_value = [Mock(state="pending")]
     approve(event)
     pull.create_review.assert_not_called()
     out, _ = capsys.readouterr()
