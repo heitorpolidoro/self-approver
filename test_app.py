@@ -149,11 +149,12 @@ def test_not_approve_when_pr_not_open(event, pull, author, capsys):
     assert "Not approving - Pull Request #1 closed" in out
 
 
-# def test_not_approve_when_failing_checks(event, pull, author, capsys):
-#     approve(event)
-#     pull.create_review.assert_not_called()
-#     out, _ = capsys.readouterr()
-#     assert "Not approving - Pull Request #1 closed" in out
+def test_not_approve_when_failing_checks(event, pull, commit, capsys):
+    commit.get_statuses.return_value = [Mock(state="pending"), Mock(state="success")]
+    approve(event)
+    pull.create_review.assert_not_called()
+    out, _ = capsys.readouterr()
+    assert "Not approving - Pull Request #1 not all checks are success" in out
 
 
 def test_re_approve_when_dismissed(event, pull, author, capsys):
