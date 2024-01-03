@@ -77,7 +77,10 @@ def approve(event: StatusEvent) -> None:
             )
             continue
 
-        if any(review.user.login == branch_owner.login and review.state == "APPROVED" for review in pr.get_reviews()):
+        if any(
+            review.user.login == branch_owner.login and review.state == "APPROVED"
+            for review in pr.get_reviews()
+        ):
             reasons.append(f"Pull Request #{pr.number} already approved")
             continue
         pr.create_review(event="APPROVE", body="Approved by Self Approver")
