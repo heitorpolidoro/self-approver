@@ -49,7 +49,11 @@ def pull(protected_branch, branch, author):
     :return: Mocked Repository
     """
     pull = Mock(
-        base=protected_branch, head=branch, requested_reviewers=[author], state="open"
+        base=protected_branch,
+        head=branch,
+        requested_reviewers=[author],
+        state="open",
+        number=1,
     )
     pull.get_reviews.return_value = []
     return pull
@@ -99,63 +103,68 @@ def event(repository, commit):
 @pytest.fixture
 def mock_approve_if_ok_pr():
     with patch("app.approve_if_ok_pr") as mock:
+        mock.return_value = None
         yield mock
 
 
 def test_approve_if_ok_success(
-    event, repository, pull, protected_branch, mock_approve_if_ok_pr
+    event, repository, pull, protected_branch, mock_approve_if_ok_pr, capsys
 ):
-    event.state = "success"
     approve_if_ok(event)
     mock_approve_if_ok_pr.assert_called_once_with(repository, pull, protected_branch)
+    out, _ = capsys.readouterr()
+    assert "Pull Request #1 approved" in out
 
 
-def test_approve_if_ok_success_closed_pr(
-    event, repository, pull, branch, mock_approve_if_ok_pr
+def test_approve_if_ok_approved(
+    event, repository, pull, protected_branch, mock_approve_if_ok_pr, capsys
 ):
-    event.state = "success"
-    pull.state = "closed"
+    pull.state = "approved"
     approve_if_ok(event)
     mock_approve_if_ok_pr.assert_not_called()
+    out, _ = capsys.readouterr()
+    assert "Not approving - Pull Request #1 approved" in out
 
 
-def test_approve_if_ok_success_not_protected_branch(
-    event, repository, pull, branch, mock_approve_if_ok_pr
+def test_approve_if_ok_closed_pr(
+    event, repository, pull, branch, mock_approve_if_ok_pr, capsys
 ):
-    event.state = "success"
+    pull.state = "closed"
+    approve_if_ok(event)
+    out, _ = capsys.readouterr()
+    assert "Not approving - Pull Request #1 closed" in out
+
+
+def test_approve_if_ok_not_protected_branch(
+    event, repository, pull, branch, mock_approve_if_ok_pr, capsys
+):
     pull.base = branch
     approve_if_ok(event)
     mock_approve_if_ok_pr.assert_not_called()
-
-
-def test_approve_if_ok_not_success(
-    event, repository, pull, protected_branch, mock_approve_if_ok_pr
-):
-    event.state = "failure"
-    approve_if_ok(event)
-    mock_approve_if_ok_pr.assert_not_called()
+    out, _ = capsys.readouterr()
+    assert "Not approving - Pull Request #1 base branch not protected" in out
 
 
 def test_approve_if_ok_pr(pull, repository, protected_branch):
-    approve_if_ok_pr(repository, pull, protected_branch)
+    assert approve_if_ok_pr(repository, pull, protected_branch) is None
     pull.create_review.assert_called_once_with(
         body="Approved by Self Approver", event="APPROVE"
     )
 
 
-def test_approve_if_ok_dismissed_review(pull, repository, protected_branch, author):
+def test_approve_if_ok_pr_dismissed_review(pull, repository, protected_branch, author):
     pull.requested_reviewers = []
     pull.get_reviews.return_value = [
         Mock(state="DISMISSED", user=author),
         Mock(state="COMMENTED", user=Mock(login="other")),
     ]
-    approve_if_ok_pr(repository, pull, protected_branch)
+    assert approve_if_ok_pr(repository, pull, protected_branch) is None
     pull.create_review.assert_called_once_with(
         body="Approved by Self Approver", event="APPROVE"
     )
 
 
-def test_approve_if_ok_pr_not_match_pr_request_reviews(
+def test_approve_if_ok_pr_wrong_review_count(
     pull, repository, protected_branch, author
 ):
     required_pull_request_reviews = (
@@ -164,26 +173,58 @@ def test_approve_if_ok_pr_not_match_pr_request_reviews(
 
     required_pull_request_reviews.required_approving_review_count = 2
     required_pull_request_reviews.require_code_owner_reviews = [author]
-    approve_if_ok_pr(repository, pull, protected_branch)
+    assert "Wrong required approving review count: 2" == approve_if_ok_pr(
+        repository, pull, protected_branch
+    )
 
-    required_pull_request_reviews.required_approving_review_count = 1
-    required_pull_request_reviews.require_code_owner_reviews = []
-    approve_if_ok_pr(repository, pull, protected_branch)
+    pull.create_review.assert_not_called()
 
+
+def test_approve_if_ok_pr_without_requested_review(
+    pull, repository, protected_branch, author
+):
+    required_pull_request_reviews = (
+        protected_branch.get_protection.return_value.required_pull_request_reviews
+    )
     required_pull_request_reviews.required_approving_review_count = 1
     required_pull_request_reviews.require_code_owner_reviews = [author]
     pull.requested_reviewers = []
-    approve_if_ok_pr(repository, pull, protected_branch)
+    assert (
+        f"Pull Request #1 branch owner '{author.login}' not in requested reviewers"
+        == approve_if_ok_pr(repository, pull, protected_branch)
+    )
 
+    pull.create_review.assert_not_called()
+
+
+def test_approve_if_ok_pr_requested_review_other_author(
+    pull, repository, protected_branch, author
+):
+    required_pull_request_reviews = (
+        protected_branch.get_protection.return_value.required_pull_request_reviews
+    )
     other_author = Mock(login="other")
     required_pull_request_reviews.required_approving_review_count = 1
     required_pull_request_reviews.require_code_owner_reviews = [author]
     pull.requested_reviewers = [other_author]
-    approve_if_ok_pr(repository, pull, protected_branch)
+    assert (
+        f"Pull Request #1 branch owner '{author.login}' not in requested reviewers"
+        == approve_if_ok_pr(repository, pull, protected_branch)
+    )
 
+    pull.create_review.assert_not_called()
+
+
+def test_approve_if_ok_pr_dismissed_other_author(
+    pull, repository, protected_branch, author
+):
     pull.requested_reviewers = []
+    other_author = Mock(login="other")
     pull.get_reviews.return_value = [Mock(state="DISMISSED", user=other_author)]
-    approve_if_ok_pr(repository, pull, protected_branch)
+    assert (
+        f"Pull Request #1 branch owner '{author.login}' not in requested reviewers"
+        == approve_if_ok_pr(repository, pull, protected_branch)
+    )
 
     pull.create_review.assert_not_called()
 

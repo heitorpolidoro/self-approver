@@ -5,6 +5,7 @@ including a webhook handler for creating pull requests when new branches are cre
 import logging
 import os
 import sys
+from typing import Optional
 
 import sentry_sdk
 from flask import Flask, request
@@ -56,18 +57,29 @@ def approve_if_ok(event: StatusEvent) -> None:
     """
     repository = event.repository
     print(f"{repository.full_name}:{[b.name for b in event.branches]}")
-    if event.state == "success":
-        for pr in event.commit.get_pulls():
-            if pr.state == "open":
-                base = repository.get_branch(pr.base.ref)
-                if base.protected:
-                    if approve_if_ok_pr(repository, pr, base):
-                        print(f"Pull Request #{pr.number} approved")
-                    else:
-                        print(f"Pull Request #{pr.number} not approved")
+    reasons = []
+    approved_prs = []
+    for pr in event.commit.get_pulls():
+        if pr.state == "open":
+            base = repository.get_branch(pr.base.ref)
+            if base.protected:
+                if reason := approve_if_ok_pr(repository, pr, base):
+                    reasons.append(reason)
+                else:
+                    approved_prs.append(pr)
+            else:
+                reasons.append(f"Pull Request #{pr.number} base branch not protected")
+        else:
+            reasons.append(f"Pull Request #{pr.number} {pr.state}")
+    for reason in reasons:
+        print(f"Not approving - {reason}")
+    for pr in approved_prs:
+        print(f"Pull Request #{pr.number} approved")
 
 
-def approve_if_ok_pr(repository: Repository, pr: PullRequest, base: Branch) -> bool:
+def approve_if_ok_pr(
+    repository: Repository, pr: PullRequest, base: Branch
+) -> Optional[str]:
     """
     This function checks if the protection rules matches:
     - Has only one required review
@@ -79,27 +91,28 @@ def approve_if_ok_pr(repository: Repository, pr: PullRequest, base: Branch) -> b
     """
     protection = base.get_protection()
     if (
-        protection.required_pull_request_reviews.require_code_owner_reviews
-        and protection.required_pull_request_reviews.required_approving_review_count
-        == 1
-    ):
-        head = repository.get_branch(pr.head.ref)
-        branch_owner = (
-            repository.compare(base.commit.sha, head.commit.sha).commits[0].author
-        )
-        review_dismissed = False
-        for review in pr.get_reviews():
-            if review.user.login == branch_owner.login:
-                if review.state == "DISMISSED":
-                    review_dismissed = True
-                elif review.state == "APPROVED":
-                    review_dismissed = False
-                    break
+        count := protection.required_pull_request_reviews.required_approving_review_count
+    ) != 1:
+        return f"Wrong required approving review count: {count}"
 
-        if pr.requested_reviewers == [branch_owner] or review_dismissed:
-            pr.create_review(event="APPROVE", body="Approved by Self Approver")
-            return True
-    return False
+    head = repository.get_branch(pr.head.ref)
+    branch_owner = (
+        repository.compare(base.commit.sha, head.commit.sha).commits[0].author
+    )
+    review_dismissed = False
+    for review in pr.get_reviews():
+        if review.user.login == branch_owner.login:
+            if review.state == "DISMISSED":
+                review_dismissed = True
+            elif review.state == "APPROVED":
+                review_dismissed = False
+                break
+
+    if pr.requested_reviewers == [branch_owner] or review_dismissed:
+        pr.create_review(event="APPROVE", body="Approved by Self Approver")
+        return None
+    else:
+        return f"Pull Request #1 branch owner '{branch_owner.login}' not in requested reviewers"
 
 
 @app.route("/", methods=["GET"])
