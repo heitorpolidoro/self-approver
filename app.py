@@ -52,10 +52,11 @@ def approve(event: StatusEvent) -> None:
     :param event: The status event
     """
     repository = event.repository
-    print(f"{repository.full_name}:{[b.name for b in event.branches]}")
     reasons = []
     approved_prs = []
     for pr in event.commit.get_pulls():
+        print(f"Checking Pull Request #{pr.number} from {repository.full_name}")
+
         if event.commit.get_combined_status().state != "success":
             reasons.append(f"Pull Request #{pr.number} not all checks are success")
             continue
