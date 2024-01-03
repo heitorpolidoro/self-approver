@@ -14,12 +14,12 @@ from github.Repository import Repository
 from githubapp import webhook_handler
 from githubapp.events import StatusEvent
 
-logger = logging.getLogger(__name__)
 logging.basicConfig(
     stream=sys.stdout,
     format="%(levelname)s:%(module)s:%(funcName)s:%(message)s",
     level=logging.INFO,
 )
+logger = logging.getLogger(__name__)
 
 if sentry_dns := os.getenv("SENTRY_DSN"):  # pragma: no cover
     # Initialize Sentry SDK for error logging
@@ -36,7 +36,7 @@ if sentry_dns := os.getenv("SENTRY_DSN"):  # pragma: no cover
     logger.info("Sentry initialized")
 
 app = Flask("Self Approver")
-app.__doc__ = "This is a Flask application auto merging pull requests."
+app.__doc__ = "This is a Flask application to automatically approve Pull Requests."
 
 
 # @app.route("/callback", methods=["GET"])
