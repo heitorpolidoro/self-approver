@@ -5,13 +5,9 @@ including a webhook handler for creating pull requests when new branches are cre
 import logging
 import os
 import sys
-from typing import Optional
 
 import sentry_sdk
 from flask import Flask, request
-from github.Branch import Branch
-from github.PullRequest import PullRequest
-from github.Repository import Repository
 from githubapp import webhook_handler
 from githubapp.events import StatusEvent
 
@@ -48,7 +44,7 @@ app.__doc__ = "This is a Flask application to automatically approve Pull Request
 
 
 @webhook_handler.webhook_handler(StatusEvent)
-def approve_if_ok(event: StatusEvent) -> None:
+def approve(event: StatusEvent) -> None:
     """
     This function is a webhook handler that check if the state is "success" and if the base branch of
     each PR is protected, if so try to approve the PR
@@ -60,59 +56,37 @@ def approve_if_ok(event: StatusEvent) -> None:
     reasons = []
     approved_prs = []
     for pr in event.commit.get_pulls():
-        if pr.state == "open":
-            base = repository.get_branch(pr.base.ref)
-            if base.protected:
-                if reason := approve_if_ok_pr(repository, pr, base):
-                    reasons.append(reason)
-                else:
-                    approved_prs.append(pr)
-            else:
-                reasons.append(f"Pull Request #{pr.number} base branch not protected")
-        else:
+        if pr.state != "open":
             reasons.append(f"Pull Request #{pr.number} {pr.state}")
+            continue
+
+        base = repository.get_branch(pr.base.ref)
+        if not base.protected:
+            reasons.append(f"Pull Request #{pr.number} base branch not protected")
+            continue
+
+        head = repository.get_branch(pr.head.ref)
+
+        branch_owner = (
+            repository.compare(base.commit.sha, head.commit.sha).commits[0].author
+        )
+        if branch_owner.login != repository.owner.login:
+            reasons.append(
+                f'The branch "{head.ref}" owner, "{branch_owner.login}", '
+                f'is not the same as the repository owner, "{repository.owner.login}"'
+            )
+            continue
+
+        if any(review.user.login == branch_owner.login and review.state == "APPROVED" for review in pr.get_reviews()):
+            reasons.append(f"Pull Request #{pr.number} already approved")
+            continue
+        pr.create_review(event="APPROVE", body="Approved by Self Approver")
+        approved_prs.append(pr)
+
     for reason in reasons:
         print(f"Not approving - {reason}")
     for pr in approved_prs:
         print(f"Pull Request #{pr.number} approved")
-
-
-def approve_if_ok_pr(
-    repository: Repository, pr: PullRequest, base: Branch
-) -> Optional[str]:
-    """
-    This function checks if the protection rules matches:
-    - Has only one required review
-    - The branch creator is the same as the requested review
-
-    :param repository:
-    :param pr:
-    :param base:
-    """
-    protection = base.get_protection()
-    if (
-        count := protection.required_pull_request_reviews.required_approving_review_count
-    ) != 1:
-        return f"Wrong required approving review count: {count}"
-
-    head = repository.get_branch(pr.head.ref)
-    branch_owner = (
-        repository.compare(base.commit.sha, head.commit.sha).commits[0].author
-    )
-    review_dismissed = False
-    for review in pr.get_reviews():
-        if review.user.login == branch_owner.login:
-            if review.state == "DISMISSED":
-                review_dismissed = True
-            elif review.state == "APPROVED":
-                review_dismissed = False
-                break
-
-    if pr.requested_reviewers == [branch_owner] or review_dismissed:
-        pr.create_review(event="APPROVE", body="Approved by Self Approver")
-        return None
-    else:
-        return f"Pull Request #1 branch owner '{branch_owner.login}' not in requested reviewers"
 
 
 @app.route("/", methods=["GET"])
