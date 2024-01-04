@@ -9,7 +9,7 @@ import sys
 import sentry_sdk
 from flask import Flask, request
 from githubapp import webhook_handler
-from githubapp.events import StatusEvent
+from githubapp.events.check_run import CheckRunCompletedEvent
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -43,8 +43,8 @@ app.__doc__ = "This is a Flask application to automatically approve Pull Request
 #     body = request.json
 
 
-@webhook_handler.webhook_handler(StatusEvent)
-def approve(event: StatusEvent) -> None:
+@webhook_handler.webhook_handler(CheckRunCompletedEvent)
+def approve(event: CheckRunCompletedEvent) -> None:
     """
     This function is a webhook handler that check if the state is "success" and if the base branch of
     each PR is protected, if so try to approve the PR
@@ -54,15 +54,21 @@ def approve(event: StatusEvent) -> None:
     repository = event.repository
     reasons = []
     approved_prs = []
-    print(f"Context {event.context}")
-    for pr in event.commit.get_pulls():
+    print(f"Check Run {event.check_run.name}")
+    if event.check_run.conclusion != "success":
+        print(
+            f"Not approving - Check Run {event.check_run.name}: {event.check_run.conclusion}"
+        )
+        return
+
+    for pr in event.check_run.pull_requests:
         print(f"Checking Pull Request #{pr.number} from {repository.full_name}")
 
-        for c in event.commit.get_check_runs():
+        pr = repository.get_pull(pr.number)
+        commit = list(pr.get_commits())[-1]
+        for c in commit.get_check_runs():
             print(c.name, c.conclusion)
-        if any(
-            check.conclusion != "success" for check in event.commit.get_check_runs()
-        ):
+        if any(check.conclusion != "success" for check in commit.get_check_runs()):
             reasons.append(f"Pull Request #{pr.number} not all checks are success")
             continue
 
