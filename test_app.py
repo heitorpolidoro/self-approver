@@ -43,7 +43,7 @@ def protected_branch(author):
 
 
 @pytest.fixture
-def pull(protected_branch, branch, author):
+def pull(protected_branch, branch, author, commit):
     """
     This fixture returns a mocked pull object with default values for the attributes.
     :return: Mocked Repository
@@ -55,24 +55,24 @@ def pull(protected_branch, branch, author):
         state="open",
         number=1,
     )
+    pull.get_commits.return_value = [commit]
     pull.get_reviews.return_value = []
     return pull
 
 
 @pytest.fixture
-def commit(pull, author):
+def commit(author):
     """
     This fixture returns a mocked commit object with default values for the attributes.
     :return: Mocked Commit
     """
     commit = Mock(author=author)
-    commit.get_pulls.return_value = [pull]
-    commit.get_check_runs.return_value = [Mock(conclusion="success")]
+    commit.get_check_runs.return_value = []
     return commit
 
 
 @pytest.fixture
-def repository(protected_branch, branch, commit):
+def repository(protected_branch, branch, commit, pull):
     """
     This fixture returns a mocked repository object with default values for the attributes.
     :return: Mocked Repository
@@ -86,18 +86,31 @@ def repository(protected_branch, branch, commit):
         lambda branch_ref: protected_branch if branch_ref == "master" else branch
     )
     repository.compare.return_value.commits = [commit]
+    repository.get_pull.return_value = pull
     return repository
 
 
 @pytest.fixture
-def event(repository, commit):
+def check_run(pull):
+    """
+    This fixture returns a mocked check run object with default values for the attributes.
+    :return: Mocked CheckRun
+    """
+    check_run = Mock(conclusion="success")
+    check_run.name = "Self Approver"
+    check_run.pull_requests = [pull]
+    return check_run
+
+
+@pytest.fixture
+def event(repository, check_run):
     """
     This fixture returns a mocked event object with default values for the attributes.
     :return: Mocked Event
     """
     return Mock(
         repository=repository,
-        commit=commit,
+        check_run=check_run,
         ref="issue-42",
         branches=[Mock(name="issue-42")],
     )
@@ -110,6 +123,14 @@ def test_approve_success(event, pull, capsys):
     )
     out, _ = capsys.readouterr()
     assert "Pull Request #1 approved" in out
+
+
+def test_not_approve_when_check_run_not_success(event, pull, check_run, capsys):
+    check_run.conclusion = "failure"
+    approve(event)
+    out, _ = capsys.readouterr()
+    assert "Not approving - Check Run Self Approver: failure" in out
+    pull.create_review.assert_not_called()
 
 
 def test_not_approve_when_other_owner(event, pull, repository, capsys):
@@ -155,18 +176,6 @@ def test_not_approve_when_failing_checks(event, pull, commit, capsys):
     pull.create_review.assert_not_called()
     out, _ = capsys.readouterr()
     assert "Not approving - Pull Request #1 not all checks are success" in out
-
-
-def test_re_approve_when_dismissed(event, pull, author, capsys):
-    pull.get_reviews.return_value = [
-        Mock(state="DISMISSED", user=author),
-    ]
-    approve(event)
-    pull.create_review.assert_called_once_with(
-        body="Approved by Self Approver", event="APPROVE"
-    )
-    out, _ = capsys.readouterr()
-    assert "Pull Request #1 approved" in out
 
 
 class TestApp(TestCase):

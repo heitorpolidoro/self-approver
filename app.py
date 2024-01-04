@@ -55,10 +55,17 @@ def approve(event: CheckRunCompletedEvent) -> None:
     reasons = []
     approved_prs = []
     print(f"Check Run {event.check_run.name}")
-    for pr in event.check_run.get_pulls():
+    if event.check_run.conclusion != "success":
+        print(
+            f"Not approving - Check Run {event.check_run.name}: {event.check_run.conclusion}"
+        )
+        return
+
+    for pr in event.check_run.pull_requests:
         print(f"Checking Pull Request #{pr.number} from {repository.full_name}")
 
-        commit = pr.get_commits()[0]
+        pr = repository.get_pull(pr.number)
+        commit = list(pr.get_commits())[-1]
         for c in commit.get_check_runs():
             print(c.name, c.conclusion)
         if any(check.conclusion != "success" for check in commit.get_check_runs()):
@@ -92,7 +99,7 @@ def approve(event: CheckRunCompletedEvent) -> None:
         ):
             reasons.append(f"Pull Request #{pr.number} already approved")
             continue
-        # pr.create_review(event="APPROVE", body="Approved by Self Approver")
+        pr.create_review(event="APPROVE", body="Approved by Self Approver")
         approved_prs.append(pr)
 
     for reason in reasons:
