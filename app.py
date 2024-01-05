@@ -9,7 +9,9 @@ import sys
 import sentry_sdk
 from flask import Flask, request
 from githubapp import webhook_handler
-from githubapp.events.check_run import CheckRunCompletedEvent
+from githubapp.events import CheckSuiteCompletedEvent, CheckSuiteRequestedEvent
+
+CHECK_RUN_NAME = "Self Approver"
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -43,8 +45,27 @@ app.__doc__ = "This is a Flask application to automatically approve Pull Request
 #     body = request.json
 
 
-@webhook_handler.webhook_handler(CheckRunCompletedEvent)
-def approve(event: CheckRunCompletedEvent) -> None:
+@webhook_handler.webhook_handler(CheckSuiteRequestedEvent)
+def check_suite_requested(event: CheckSuiteRequestedEvent) -> None:
+    repository = event.repository
+    commit = repository.get_commit(event.check_suite.head_sha)
+    repository.create_check_run(
+        CHECK_RUN_NAME,
+        event.check_suite.head_sha,
+        status="in_progress",
+        output={
+            "title": "Waiting for all checks to complete",
+            "summary": f"Combined status: {commit.get_combined_status().state}",
+            "text": "\n".join(
+                f"{check.name}: {check.status or ''}:{check.conclusion or ''}"
+                for check in commit.get_check_runs()
+            ),
+        },
+    )
+
+
+@webhook_handler.webhook_handler(CheckSuiteCompletedEvent)
+def approve(event: CheckSuiteCompletedEvent) -> None:
     """
     This function is a webhook handler that check if the state is "success" and if the base branch of
     each PR is protected, if so try to approve the PR
@@ -54,21 +75,27 @@ def approve(event: CheckRunCompletedEvent) -> None:
     repository = event.repository
     reasons = []
     approved_prs = []
-    print(f"Check Run {event.check_run.name}")
-    if event.check_run.conclusion != "success":
+    check_suite = event.check_suite
+    print(
+        f"Check Suite: {check_suite.app.name} - {check_suite.status or ''}:{check_suite.conclusion or ''}"
+    )
+    if check_suite.conclusion != "success":
         print(
-            f"Not approving - Check Run {event.check_run.name}: {event.check_run.conclusion}"
+            f"Not approving - Check Suite {check_suite.app.name}: {check_suite.conclusion}"
         )
         return
 
-    for pr in event.check_run.pull_requests:
+    for pr in check_suite.pull_requests:
         print(f"Checking Pull Request #{pr.number} from {repository.full_name}")
 
         pr = repository.get_pull(pr.number)
-        commit = list(pr.get_commits())[-1]
-        for c in commit.get_check_runs():
-            print(c.name, c.conclusion)
-        if any(check.conclusion != "success" for check in commit.get_check_runs()):
+        commit = repository.get_commit(check_suite.head_sha)
+        print(f"{commit.get_combined_status().state=}")
+        if any(
+            check.conclusion != "success"
+            for check in commit.get_check_runs()
+            if check.name != CHECK_RUN_NAME
+        ):
             reasons.append(f"Pull Request #{pr.number} not all checks are success")
             continue
 
@@ -98,8 +125,17 @@ def approve(event: CheckRunCompletedEvent) -> None:
             for review in pr.get_reviews()
         ):
             reasons.append(f"Pull Request #{pr.number} already approved")
-            continue
-        pr.create_review(event="APPROVE", body="Approved by Self Approver")
+        else:
+            pr.create_review(event="APPROVE", body="Approved by Self Approver")
+        check_run = next(
+            filter(lambda check: check.name == CHECK_RUN_NAME, commit.get_check_runs())
+        )
+        check_run.edit(
+            status="completed",
+            output={"title": "Pull Request approved", "summary": f"Pull Request #{pr.number} approved"},
+            conclusion="success",
+        )
+
         approved_prs.append(pr)
 
     for reason in reasons:
