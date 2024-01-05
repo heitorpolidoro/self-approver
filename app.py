@@ -132,7 +132,10 @@ def approve(event: CheckSuiteCompletedEvent) -> None:
         )
         check_run.edit(
             status="completed",
-            output={"title": "Pull Request approved", "summary": f"Pull Request #{pr.number} approved"},
+            output={
+                "title": "Pull Request approved",
+                "summary": f"Pull Request #{pr.number} approved",
+            },
             conclusion="success",
         )
 
