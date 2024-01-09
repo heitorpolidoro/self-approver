@@ -89,11 +89,13 @@ def approve(event: CheckSuiteCompletedEvent) -> None:
         print(f"Checking Pull Request #{pr.number} from {repository.full_name}")
 
         pr = repository.get_pull(pr.number)
-        commit = repository.get_commit(check_suite.head_sha)
-        print(f"{commit.get_combined_status().state=}")
+        pr_commits = pr.get_commits()
+        first_commit = pr_commits[0]
+        last_commit = pr_commits.reversed[0]
+        print(f"{last_commit.get_combined_status().state=}")
         if any(
             check.conclusion != "success"
-            for check in commit.get_check_runs()
+            for check in last_commit.get_check_runs()
             if check.name != CHECK_RUN_NAME
         ):
             reasons.append(f"Pull Request #{pr.number} not all checks are success")
@@ -108,14 +110,10 @@ def approve(event: CheckSuiteCompletedEvent) -> None:
             reasons.append(f"Pull Request #{pr.number} base branch not protected")
             continue
 
-        head = repository.get_branch(pr.head.ref)
-
-        branch_owner = (
-            repository.compare(base.commit.sha, head.commit.sha).commits[0].author
-        )
+        branch_owner = first_commit.author
         if branch_owner.login != repository.owner.login:
             reasons.append(
-                f'The branch "{head.ref}" owner, "{branch_owner.login}", '
+                f'The branch "{pr.head.ref}" owner, "{branch_owner.login}", '
                 f'is not the same as the repository owner, "{repository.owner.login}"'
             )
             continue
@@ -128,11 +126,16 @@ def approve(event: CheckSuiteCompletedEvent) -> None:
         else:
             pr.create_review(event="APPROVE", body="Approved by Self Approver")
         check_run = next(
-            filter(lambda check: check.name == CHECK_RUN_NAME, commit.get_check_runs())
+            filter(
+                lambda check: check.name == CHECK_RUN_NAME, last_commit.get_check_runs()
+            )
         )
         check_run.edit(
             status="completed",
-            output={"title": "Pull Request approved", "summary": f"Pull Request #{pr.number} approved"},
+            output={
+                "title": "Pull Request approved",
+                "summary": f"Pull Request #{pr.number} approved",
+            },
             conclusion="success",
         )
 

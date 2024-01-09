@@ -1,5 +1,5 @@
-github-app-handler==0.8
-sentry-sdk[flask]==1.39.1
-flask==3.0.0
-Polidoro-PyGithub==2.2.0rc5
-python-dotenv==1.0
+github-app-handler<1.0
+sentry-sdk[flask]<2.0
+flask<4.0
+Polidoro-PyGithub==2.2.0rc7
+python-dotenv<2.0
